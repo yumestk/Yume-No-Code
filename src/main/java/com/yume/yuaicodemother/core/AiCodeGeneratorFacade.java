@@ -9,11 +9,14 @@ import com.yume.yuaicodemother.ai.model.MultiFileCodeResult;
 import com.yume.yuaicodemother.ai.model.message.AiResponseMessage;
 import com.yume.yuaicodemother.ai.model.message.ToolExecutedMessage;
 import com.yume.yuaicodemother.ai.model.message.ToolRequestMessage;
+import com.yume.yuaicodemother.constant.AppConstant;
+import com.yume.yuaicodemother.core.builder.VueProjectBuilder;
 import com.yume.yuaicodemother.core.parser.CodeParserExecutor;
 import com.yume.yuaicodemother.core.saver.CodeFileSaverExecutor;
 import com.yume.yuaicodemother.exception.BusinessException;
 import com.yume.yuaicodemother.exception.ErrorCode;
 import com.yume.yuaicodemother.model.enums.CodeGenTypeEnum;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.ToolExecution;
@@ -21,6 +24,8 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+
+import static dev.langchain4j.model.openai.internal.OpenAiUtils.getReasoningContent;
 
 import java.io.File;
 
@@ -33,6 +38,9 @@ public class AiCodeGeneratorFacade {
 
     @Resource
     private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
 
     /**
      * 统一入口 : 根据类型生成并保存代码
@@ -84,7 +92,7 @@ public class AiCodeGeneratorFacade {
             }
             case VUE_PROJECT -> {
                 TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
-                yield processTokenStream(tokenStream);
+                yield processTokenStream(tokenStream, appId);
             }
             default -> {
                 String errorMessage = "不支持的生成类型: " + codeGenTypeEnum.getValue();
@@ -93,13 +101,26 @@ public class AiCodeGeneratorFacade {
         };
     }
 
+    private static final ThreadLocal<String> REASONING_CONTENT_HOLDER = new ThreadLocal<>();
+
+    /**
+     * 获取当前线程的推理内容并清除
+     */
+    public static String pollReasoningContent() {
+        try {
+            return REASONING_CONTENT_HOLDER.get();
+        } finally {
+            REASONING_CONTENT_HOLDER.remove();
+        }
+    }
+
     /**
      * 将 TokenStream 转换为 Flux<String>，并传递工具调用信息
      *
      * @param tokenStream TokenStream 对象
      * @return Flux<String> 流式响应
      */
-    private Flux<String> processTokenStream(TokenStream tokenStream) {
+    private Flux<String> processTokenStream(TokenStream tokenStream, Long appId) {
         return Flux.create(sink -> {
             tokenStream.onPartialResponse((String partialResponse) -> {
                         AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
@@ -114,6 +135,15 @@ public class AiCodeGeneratorFacade {
                         sink.next(JSONUtil.toJsonStr(toolExecutedMessage));
                     })
                     .onCompleteResponse((ChatResponse response) -> {
+                        // 捕获推理内容
+                        AiMessage aiMessage = response.aiMessage();
+                        String reasoningContent = getReasoningContent(aiMessage);
+                        if (reasoningContent != null) {
+                            REASONING_CONTENT_HOLDER.set(reasoningContent);
+                        }
+                        // 执行 Vue 项目构建（同步执行，确保预览时项目已就绪）
+                        String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + "vue_project_" + appId;
+                        vueProjectBuilder.buildProject(projectPath);
                         sink.complete();
                     })
                     .onError((Throwable error) -> {

@@ -42,6 +42,12 @@ public class ChatHistory implements Serializable {
     private String message;
 
     /**
+     * 推理内容
+     */
+    @Column("reasoningContent")
+    private String reasoningContent;
+
+    /**
      * user/ai
      */
     @Column("messageType")

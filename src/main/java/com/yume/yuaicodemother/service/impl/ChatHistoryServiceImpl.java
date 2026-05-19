@@ -19,6 +19,8 @@ import com.yume.yuaicodemother.service.ChatHistoryService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import static dev.langchain4j.model.openai.internal.OpenAiUtils.cacheReasoningContent;
+import static dev.langchain4j.model.openai.internal.OpenAiUtils.getReasoningContent;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -42,6 +44,11 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
 
     @Override
     public boolean addChatMessage(Long appId, String message, String messageType, Long userId) {
+        return addChatMessage(appId, message, messageType, userId, null);
+    }
+
+    @Override
+    public boolean addChatMessage(Long appId, String message, String messageType, Long userId, String reasoningContent) {
         // 基础校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "消息内容不能为空");
@@ -54,6 +61,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         ChatHistory chatHistory = ChatHistory.builder()
                 .appId(appId)
                 .message(message)
+                .reasoningContent(reasoningContent)
                 .messageType(messageType)
                 .userId(userId)
                 .build();
@@ -113,7 +121,12 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
                     chatMemory.add(UserMessage.from(history.getMessage()));
                     loadCount++;
                 } else if(ChatHistoryMessageTypeEnum.AI.getValue().equals(history.getMessageType())) {
-                    chatMemory.add(AiMessage.from(history.getMessage()));
+                    AiMessage aiMessage = AiMessage.from(history.getMessage());
+                    String reasoningContent = history.getReasoningContent();
+                    if (StrUtil.isNotBlank(reasoningContent)) {
+                        cacheReasoningContent(aiMessage, reasoningContent);
+                    }
+                    chatMemory.add(aiMessage);
                     loadCount++;
                 }
             }

@@ -54,7 +54,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static dev.langchain4j.internal.Exceptions.illegalArgument;
 import static dev.langchain4j.internal.Utils.isNullOrBlank;
@@ -80,7 +80,24 @@ public class OpenAiUtils {
     public static final String DEFAULT_OPENAI_URL = "https://api.openai.com/v1";
     public static final String DEFAULT_USER_AGENT = "langchain4j-openai";
 
-    private static final Map<AiMessage, String> REASONING_CONTENT_CACHE = new WeakHashMap<>();
+    private static final Map<String, String> REASONING_CONTENT_CACHE = new ConcurrentHashMap<>();
+
+    public static void cacheReasoningContent(AiMessage aiMessage, String reasoningContent) {
+        String key = reasoningContentCacheKey(aiMessage);
+        if (reasoningContent != null) {
+            REASONING_CONTENT_CACHE.put(key, reasoningContent);
+        }
+    }
+
+    public static String getReasoningContent(AiMessage aiMessage) {
+        return REASONING_CONTENT_CACHE.get(reasoningContentCacheKey(aiMessage));
+    }
+
+    private static String reasoningContentCacheKey(AiMessage aiMessage) {
+        return aiMessage.text() + "::" + (aiMessage.hasToolExecutionRequests()
+                ? aiMessage.toolExecutionRequests().toString()
+                : "");
+    }
 
     public static List<Message> toOpenAiMessages(List<ChatMessage> messages) {
         return messages.stream().map(OpenAiUtils::toOpenAiMessage).collect(toList());
@@ -110,8 +127,15 @@ public class OpenAiUtils {
 
         if (message instanceof AiMessage aiMessage) {
 
+            String reasoningContent = getReasoningContent(aiMessage);
+
             if (!aiMessage.hasToolExecutionRequests()) {
-                return AssistantMessage.from(aiMessage.text());
+                AssistantMessage.Builder builder = AssistantMessage.builder()
+                        .content(aiMessage.text());
+                if (reasoningContent != null) {
+                    builder.reasoningContent(reasoningContent);
+                }
+                return builder.build();
             }
 
             ToolExecutionRequest toolExecutionRequest =
@@ -122,7 +146,11 @@ public class OpenAiUtils {
                         .arguments(toolExecutionRequest.arguments())
                         .build();
 
-                return AssistantMessage.builder().functionCall(functionCall).build();
+                AssistantMessage.Builder builder = AssistantMessage.builder().functionCall(functionCall);
+                if (reasoningContent != null) {
+                    builder.reasoningContent(reasoningContent);
+                }
+                return builder.build();
             }
 
             List<ToolCall> toolCalls = aiMessage.toolExecutionRequests().stream()
@@ -139,11 +167,6 @@ public class OpenAiUtils {
             AssistantMessage.Builder builder = AssistantMessage.builder()
                     .content(aiMessage.text())
                     .toolCalls(toolCalls);
-
-            String reasoningContent;
-            synchronized (REASONING_CONTENT_CACHE) {
-                reasoningContent = REASONING_CONTENT_CACHE.get(aiMessage);
-            }
             if (reasoningContent != null) {
                 builder.reasoningContent(reasoningContent);
             }
@@ -311,9 +334,7 @@ public class OpenAiUtils {
                     ? AiMessage.from(toolExecutionRequests)
                     : AiMessage.from(text, toolExecutionRequests);
             if (reasoningContent != null) {
-                synchronized (REASONING_CONTENT_CACHE) {
-                    REASONING_CONTENT_CACHE.put(aiMessage, reasoningContent);
-                }
+                REASONING_CONTENT_CACHE.put(reasoningContentCacheKey(aiMessage), reasoningContent);
             }
             return aiMessage;
         }
@@ -328,14 +349,16 @@ public class OpenAiUtils {
                     ? AiMessage.from(toolExecutionRequest)
                     : AiMessage.from(text, singletonList(toolExecutionRequest));
             if (reasoningContent != null) {
-                synchronized (REASONING_CONTENT_CACHE) {
-                    REASONING_CONTENT_CACHE.put(aiMessage, reasoningContent);
-                }
+                REASONING_CONTENT_CACHE.put(reasoningContentCacheKey(aiMessage), reasoningContent);
             }
             return aiMessage;
         }
 
-        return AiMessage.from(text);
+        AiMessage aiMessage = AiMessage.from(text);
+        if (reasoningContent != null) {
+            REASONING_CONTENT_CACHE.put(reasoningContentCacheKey(aiMessage), reasoningContent);
+        }
+        return aiMessage;
     }
 
     private static ToolExecutionRequest toToolExecutionRequest(ToolCall toolCall) {

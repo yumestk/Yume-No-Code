@@ -3,6 +3,8 @@ package com.yume.yuaicodemother.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.yume.yuaicodemother.ai.guardrail.PromptSafetyInputGuardrail;
+import com.yume.yuaicodemother.ai.guardrail.RetryOutputGuardrail;
 import com.yume.yuaicodemother.ai.tools.*;
 import com.yume.yuaicodemother.exception.BusinessException;
 import com.yume.yuaicodemother.exception.ErrorCode;
@@ -104,6 +106,9 @@ public class AiCodeGeneratorServiceFactory {
                         .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
                                 toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
                         ))
+                        .maxSequentialToolsInvocations(20) // 最多连续调用20次工具
+                        .inputGuardrails(new PromptSafetyInputGuardrail()) // 添加输入护轨
+//                        .outputGuardrails(new RetryOutputGuardrail()) // 添加输出护轨，为了流式输出，这里不适用
                         .build();
             }
             case HTML, MULTI_FILE -> {
@@ -113,6 +118,8 @@ public class AiCodeGeneratorServiceFactory {
                         .chatModel(chatModel)
                         .streamingChatModel(openAiStreamingChatModel)
                         .chatMemory(chatMemory)
+                        .inputGuardrails(new PromptSafetyInputGuardrail()) // 添加输入护轨
+//                        .outputGuardrails(new RetryOutputGuardrail()) // 添加输出护轨
                         .build();
             }
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,

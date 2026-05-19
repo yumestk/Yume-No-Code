@@ -37,11 +37,11 @@ public class ChatHistoryController {
 
     @GetMapping("/app/{appId}")
     public BaseResponse<Page<ChatHistory>> listAppChatHistory(@PathVariable Long appId,
-                                                              @RequestParam(defaultValue = "10") int pageSize,
-                                                              @RequestParam(required = false) LocalDateTime localDateTime,
-                                                              HttpServletRequest request) {
+                                                               @RequestParam(defaultValue = "10") int pageSize,
+                                                               @RequestParam(required = false) LocalDateTime lastCreateTime,
+                                                               HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
-        Page<ChatHistory> result = chatHistoryService.listAppChatHistoryByPage(appId, pageSize, localDateTime, loginUser);
+        Page<ChatHistory> result = chatHistoryService.listAppChatHistoryByPage(appId, pageSize, lastCreateTime, loginUser);
         return ResultUtils.success(result);
     }
 

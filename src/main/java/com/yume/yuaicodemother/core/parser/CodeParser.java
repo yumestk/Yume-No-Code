@@ -3,7 +3,7 @@ package com.yume.yuaicodemother.core.parser;
 /**
  * 代码解析器策略接口
  *
- * @author yupi
+ * @author yume
  */
 public interface CodeParser<T> {
 

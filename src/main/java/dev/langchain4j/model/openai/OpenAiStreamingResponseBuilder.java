@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static dev.langchain4j.internal.Utils.isNullOrBlank;
 import static dev.langchain4j.internal.Utils.isNullOrEmpty;
+import static dev.langchain4j.model.openai.internal.OpenAiUtils.cacheReasoningContent;
 import static dev.langchain4j.model.openai.internal.OpenAiUtils.finishReasonFrom;
 import static dev.langchain4j.model.openai.internal.OpenAiUtils.tokenUsageFrom;
 import static java.util.Collections.singletonList;
@@ -32,6 +33,7 @@ import static java.util.stream.Collectors.toList;
 public class OpenAiStreamingResponseBuilder {
 
     private final StringBuffer contentBuilder = new StringBuffer();
+    private final StringBuffer reasoningContentBuilder = new StringBuffer();
 
     private final StringBuffer toolNameBuilder = new StringBuffer();
     private final StringBuffer toolArgumentsBuilder = new StringBuffer();
@@ -95,6 +97,11 @@ public class OpenAiStreamingResponseBuilder {
         String content = delta.content();
         if (!isNullOrEmpty(content)) {
             this.contentBuilder.append(content);
+        }
+
+        String reasoningContent = delta.reasoningContent();
+        if (!isNullOrEmpty(reasoningContent)) {
+            this.reasoningContentBuilder.append(reasoningContent);
         }
 
         if (delta.functionCall() != null) {
@@ -179,6 +186,8 @@ public class OpenAiStreamingResponseBuilder {
                 .build();
 
         String text = contentBuilder.toString();
+        String reasoningContent = reasoningContentBuilder.toString();
+        boolean hasReasoningContent = !isNullOrBlank(reasoningContent);
 
         String toolName = toolNameBuilder.toString();
         if (!toolName.isEmpty()) {
@@ -190,6 +199,10 @@ public class OpenAiStreamingResponseBuilder {
             AiMessage aiMessage = isNullOrBlank(text) ?
                     AiMessage.from(toolExecutionRequest) :
                     AiMessage.from(text, singletonList(toolExecutionRequest));
+
+            if (hasReasoningContent) {
+                cacheReasoningContent(aiMessage, reasoningContent);
+            }
 
             return ChatResponse.builder()
                     .aiMessage(aiMessage)
@@ -210,6 +223,10 @@ public class OpenAiStreamingResponseBuilder {
                     AiMessage.from(toolExecutionRequests) :
                     AiMessage.from(text, toolExecutionRequests);
 
+            if (hasReasoningContent) {
+                cacheReasoningContent(aiMessage, reasoningContent);
+            }
+
             return ChatResponse.builder()
                     .aiMessage(aiMessage)
                     .metadata(chatResponseMetadata)
@@ -218,6 +235,11 @@ public class OpenAiStreamingResponseBuilder {
 
         if (!isNullOrBlank(text)) {
             AiMessage aiMessage = AiMessage.from(text);
+
+            if (hasReasoningContent) {
+                cacheReasoningContent(aiMessage, reasoningContent);
+            }
+
             return ChatResponse.builder()
                     .aiMessage(aiMessage)
                     .metadata(chatResponseMetadata)

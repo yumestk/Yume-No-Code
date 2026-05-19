@@ -194,7 +194,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
             // 更新应用封面字段
             App updateApp = new App();
             updateApp.setId(appId);
-            updateApp.setCover(appUrl);
+            updateApp.setCover(screenshotURL);
             boolean updated = this.updateById(updateApp);
             ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "更新应用封面字段失败");
         });
