@@ -138,12 +138,38 @@ declare namespace API {
     message: string
   }
 
+  type BaseResponseDeployTaskVO = {
+    code?: number
+    data?: DeployTaskVO
+    message?: string
+  }
+
+  type DeployTaskVO = {
+    id?: number
+    appId?: number
+    userId?: number
+    status?: string
+    statusText?: string
+    codeGenType?: string
+    deployKey?: string
+    deployUrl?: string
+    errorMessage?: string
+    retryCount?: number
+    messageKey?: string
+    createTime?: string
+    updateTime?: string
+  }
+
   type DeleteRequest = {
     id?: number
   }
 
   type downloadAppCodeParams = {
     appId: number
+  }
+
+  type getDeployTaskStatusParams = {
+    id: number
   }
 
   type getAppVOByIdByAdminParams = {

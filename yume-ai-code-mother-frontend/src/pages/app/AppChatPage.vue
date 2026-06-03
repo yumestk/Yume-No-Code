@@ -218,6 +218,7 @@ import {
   getAppVoById,
   deployApp as deployAppApi,
   deleteApp as deleteAppApi,
+  getDeployTaskStatus,
 } from '@/api/appController'
 import { listAppChatHistory } from '@/api/chatHistoryController'
 import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes'
@@ -277,6 +278,10 @@ const deployUrl = ref('')
 
 // 下载相关
 const downloading = ref(false)
+
+// 部署任务轮询相关
+const deployTaskId = ref<number | null>(null)
+const deployPollingTimer = ref<number | null>(null)
 
 // 可视化编辑相关
 const isEditMode = ref(false)
@@ -646,7 +651,7 @@ const downloadCode = async () => {
   }
 }
 
-// 部署应用
+// 部署应用（提交任务 + 轮询状态）
 const deployApp = async () => {
   if (!appId.value) {
     message.error('应用ID不存在')
@@ -660,18 +665,63 @@ const deployApp = async () => {
     })
 
     if (res.data.code === 0 && res.data.data) {
-      deployUrl.value = res.data.data
-      deployModalVisible.value = true
-      message.success('部署成功')
+      const task = res.data.data
+      deployTaskId.value = task.id!
+      if (task.status === 'success') {
+        onDeploySuccess(task.deployUrl!)
+      } else {
+        message.info('部署任务已提交，正在处理中...')
+        startDeployPolling()
+      }
     } else {
-      message.error('部署失败：' + res.data.message)
+      message.error('提交部署失败：' + res.data.message)
     }
   } catch (error) {
     console.error('部署失败：', error)
     message.error('部署失败，请重试')
-  } finally {
     deploying.value = false
   }
+}
+
+const startDeployPolling = () => {
+  clearDeployTaskPolling()
+  deployPollingTimer.value = window.setInterval(async () => {
+    if (!deployTaskId.value) {
+      clearDeployTaskPolling()
+      return
+    }
+    try {
+      const res = await getDeployTaskStatus({ id: deployTaskId.value })
+      if (res.data.code !== 0 || !res.data.data) {
+        return
+      }
+      const task = res.data.data
+      if (task.status === 'success') {
+        clearDeployTaskPolling()
+        deploying.value = false
+        onDeploySuccess(task.deployUrl!)
+      } else if (task.status === 'failed') {
+        clearDeployTaskPolling()
+        deploying.value = false
+        message.error('部署失败：' + (task.errorMessage || '未知错误'))
+      }
+    } catch (e) {
+      console.error('查询部署状态失败：', e)
+    }
+  }, 2000)
+}
+
+const clearDeployTaskPolling = () => {
+  if (deployPollingTimer.value !== null) {
+    window.clearInterval(deployPollingTimer.value)
+    deployPollingTimer.value = null
+  }
+}
+
+const onDeploySuccess = (url: string) => {
+  deployUrl.value = url
+  deployModalVisible.value = true
+  message.success('部署成功')
 }
 
 // 在新窗口打开预览
@@ -765,6 +815,7 @@ onMounted(() => {
 
 // 清理资源
 onUnmounted(() => {
+  clearDeployTaskPolling()
   // EventSource 会在组件卸载时自动清理
 })
 </script>

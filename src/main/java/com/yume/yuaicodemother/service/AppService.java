@@ -7,6 +7,7 @@ import com.yume.yuaicodemother.model.dto.app.AppQueryRequest;
 import com.yume.yuaicodemother.model.entity.App;
 import com.yume.yuaicodemother.model.entity.User;
 import com.yume.yuaicodemother.model.vo.AppVO;
+import com.yume.yuaicodemother.model.vo.DeployTaskVO;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -36,20 +37,13 @@ public interface AppService extends IService<App> {
     Long createApp(AppAddRequest appAddRequest, User loginUser);
 
     /**
-     * 应用部署
+     * 提交部署任务（异步执行）。
+     *
      * @param appId 应用ID
      * @param loginUser 登录用户
-     * @return 可访问的部署地址
+     * @return 部署任务视图
      */
-    String deployApp(Long appId, User loginUser);
-
-    /**
-     * 异步生成应用截图并更新封面
-     *
-     * @param appId  应用ID
-     * @param appUrl 应用访问URL
-     */
-    void generateAppScreenshotAsync(Long appId, String appUrl);
+    DeployTaskVO deployApp(Long appId, User loginUser);
 
     /**
      * 获取应用封装类

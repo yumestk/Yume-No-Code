@@ -100,12 +100,26 @@ export async function deleteApp(body: API.DeleteRequest, options?: { [key: strin
 
 /** 此处后端没有提供注释 POST /app/deploy */
 export async function deployApp(body: API.AppDeployRequest, options?: { [key: string]: any }) {
-  return request<API.BaseResponseString>('/app/deploy', {
+  return request<API.BaseResponseDeployTaskVO>('/app/deploy', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     data: body,
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 GET /app/deploy/task/get */
+export async function getDeployTaskStatus(
+  params: API.getDeployTaskStatusParams,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseDeployTaskVO>('/app/deploy/task/get', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
     ...(options || {}),
   })
 }

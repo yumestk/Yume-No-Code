@@ -63,3 +63,24 @@ create table chat_history
     INDEX idx_createTime (createTime),             -- 提升基于时间的查询性能
     INDEX idx_appId_createTime (appId, createTime) -- 游标查询核心索引
 ) comment '对话历史' collate = utf8mb4_unicode_ci;
+
+-- 部署任务表
+create table deploy_task
+(
+    id           bigint                not null comment 'id' primary key,
+    appId        bigint                not null comment '应用id',
+    userId       bigint                not null comment '用户id',
+    status       varchar(32)           not null comment 'pending/running/success/failed',
+    codeGenType  varchar(64)           null comment '代码生成类型',
+    deployKey    varchar(64)           null comment '部署标识',
+    deployUrl    varchar(512)          null comment '部署地址',
+    errorMessage text                  null comment '失败原因',
+    retryCount   int     default 0     not null comment '重试次数',
+    messageKey   varchar(128)          null comment 'MQ消息唯一键',
+    createTime   datetime default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime   datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete     tinyint  default 0    not null comment '是否删除',
+    INDEX idx_appId (appId),
+    INDEX idx_userId (userId),
+    INDEX idx_status (status)
+) comment '部署任务' collate = utf8mb4_unicode_ci;

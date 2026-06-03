@@ -24,3 +24,7 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:localhost:9876}
+  producer:
+    group: yume_ai_code_mother_app_task_producer

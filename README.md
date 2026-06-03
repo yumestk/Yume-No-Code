@@ -28,9 +28,10 @@ flowchart LR
     C --> E[大模型 API\nDeepSeek / Qwen 兼容接口]
     C --> F[工具调用\n文件读写/修改/删除/目录读取]
 
-    B --> G[(MySQL\n应用/用户/对话数据)]
+    B --> G[(MySQL\n应用/用户/对话/部署任务)]
     B --> H[(Redis\n会话/对话记忆/分布式能力)]
     B --> I[Caffeine\n本地高频对象缓存]
+    B --> L[RocketMQ\n部署/截图异步任务]
 
     J[Spring Cache] --> H
     K[AiService Factory] --> I
@@ -142,6 +143,7 @@ flowchart LR
 | MySQL | 结构化数据一致性和可追溯性强 | 用户/应用/对话持久化 |
 | Redis | 高性能 KV、支持会话和分布式场景 | Session、Chat Memory、限流基础 |
 | Caffeine | 进程内低延迟缓存，性能优于直接远程调用 | AI 服务实例本地缓存 |
+| RocketMQ | 高可靠异步消息，支持重试与死信 | 部署与截图异步解耦，任务状态管理 |
 | Reactor（Flux）+ SSE | 天然支持流式返回，用户体验优于同步阻塞 | AI 生成实时输出 |
 
 ### 为什么选择 LangChain4j
@@ -160,7 +162,14 @@ flowchart LR
 
 - **L1 Caffeine（本地）**：缓存热点 AI 服务实例，减少重复构建开销
 - **L2 Redis（分布式）**：缓存跨实例共享数据，支撑多节点扩展
-- 本地缓存负责“快”，分布式缓存负责“一致与共享”，兼顾吞吐与可扩展性
+- 本地缓存负责”快”，分布式缓存负责”一致与共享”，兼顾吞吐与可扩展性
+
+### 为什么引入 RocketMQ
+
+- **部署异步化**：将耗时的 npm build 和文件拷贝从 HTTP 请求线程剥离，提升接口响应速度
+- **截图解耦**：浏览器截图是重资源操作，独立消费后不影响主链路
+- **可重试可观测**：失败自动重试，任务状态可查询，部署过程从”黑盒”变成”任务追踪”
+- **不碰主链路**：SSE 对话生成保持流式实时交互，MQ 只用在后置异步任务上
 
 ---
 
@@ -227,6 +236,7 @@ flowchart LR
 - Node.js 20+
 - MySQL 8+
 - Redis 6+
+- RocketMQ / Namesrv（部署与截图异步任务所需）
 
 ### 6.2 克隆项目
 
@@ -309,6 +319,7 @@ npm run dev
 - **智能体工程化**：不止调用模型，而是实现了可编排、可回路的 LangGraph4j 工作流
 - **多轮上下文能力**：Redis 持久记忆 + DB 历史回放，提升连续对话质量
 - **高性能实践**：Caffeine + Redis 多级缓存，兼顾低延迟与分布式扩展
+- **异步任务架构**：RocketMQ 解耦部署与截图，支持重试、幂等、状态追踪
 - **企业后台能力**：用户、应用、对话、精选配置等运营治理模块齐全
 - **个人成长价值**：以大二阶段独立完成该项目，具备 Java 后端 + AI 应用落地的系统能力
 
@@ -340,7 +351,9 @@ npm run dev
 │   ├── ai                  # LangChain4j 智能体与工具
 │   ├── langgraph4j         # 工作流编排与节点
 │   ├── core                # 生成/解析/保存核心流程
+│   ├── mq                  # RocketMQ Producer/Consumer
 │   ├── config              # 模型、缓存、跨域、存储等配置
+│   ├── constant            # 全局常量（含 MQ Topic/Tag）
 │   └── ratelimter          # 限流注解与切面
 ├── src/main/resources
 │   ├── prompt              # 系统提示词模板

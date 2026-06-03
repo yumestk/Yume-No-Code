@@ -19,8 +19,10 @@ import com.yume.yuaicodemother.model.dto.app.*;
 import com.yume.yuaicodemother.model.entity.User;
 import com.yume.yuaicodemother.model.enums.CodeGenTypeEnum;
 import com.yume.yuaicodemother.model.vo.AppVO;
+import com.yume.yuaicodemother.model.vo.DeployTaskVO;
 import com.yume.yuaicodemother.ratelimter.annotation.RateLimit;
 import com.yume.yuaicodemother.ratelimter.enums.RateLimitType;
+import com.yume.yuaicodemother.service.DeployTaskService;
 import com.yume.yuaicodemother.service.ProjectDownloadService;
 import com.yume.yuaicodemother.service.UserService;
 import jakarta.annotation.Resource;
@@ -58,6 +60,9 @@ public class AppController {
     @Resource
     private ProjectDownloadService projectDownloadService;
 
+    @Resource
+    private DeployTaskService deployTaskService;
+
     @GetMapping(value = "/code/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 对话请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
@@ -90,22 +95,35 @@ public class AppController {
     }
 
     /**
-     * 应用部署
+     * 提交部署任务（异步执行）。
      *
      * @param appDeployRequest 部署请求
      * @param request          请求
-     * @return 部署 URL
+     * @return 部署任务视图
      */
     @PostMapping("/deploy")
-    public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
+    public BaseResponse<DeployTaskVO> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
         Long appId = appDeployRequest.getAppId();
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-        // 调用服务部署应用
-        String deployUrl = appService.deployApp(appId, loginUser);
-        return ResultUtils.success(deployUrl);
+        // 提交部署任务
+        DeployTaskVO deployTaskVO = appService.deployApp(appId, loginUser);
+        return ResultUtils.success(deployTaskVO);
+    }
+
+    /**
+     * 查询部署任务状态。
+     *
+     * @param id 任务 ID
+     * @return 部署任务视图
+     */
+    @GetMapping("/deploy/task/get")
+    public BaseResponse<DeployTaskVO> getDeployTaskStatus(@RequestParam long id) {
+        ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR, "任务 ID 不能为空");
+        DeployTaskVO deployTaskVO = deployTaskService.getDeployTaskVOById(id);
+        return ResultUtils.success(deployTaskVO);
     }
 
     /**
